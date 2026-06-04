@@ -9,6 +9,9 @@ struct Pager{
     FILE* file;
     int total_pages;
     BNode* cache[MAX_PAGES];
+    Pager(FILE* f){
+        file = f;
+    }
 };
 
 Pager* pager_open(const char* filename);

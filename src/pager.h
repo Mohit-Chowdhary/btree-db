@@ -17,5 +17,6 @@ struct Pager{
 Pager* pager_open(const char* filename);
 BNode* get_page(Pager* pager, int page_num);
 void flush_page(Pager* pager, int page_num);
+void pager_close(Pager* pager);
 
 #endif

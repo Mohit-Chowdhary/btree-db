@@ -19,11 +19,7 @@ BNode* get_page(Pager* pager, int page_num){
     else{
         BNode* node = new BNode(page_num, false);
         fseek(pager->file, page_num *sizeof(BNode), SEEK_SET);
-        size_t read = fread(node, sizeof(BNode), 1, pager->file);
-        if(read == 0){
-            pager->cache[page_num] = node;
-            return node;
-        }
+        fread(node, sizeof(BNode), 1, pager->file);
         pager->cache[page_num] = node;
         return pager->cache[page_num];
     }
@@ -39,4 +35,16 @@ void flush_page(Pager* pager, int page_num){
     fwrite(node, sizeof(BNode), 1, pager->file);
 
     fflush(pager->file);
+}
+
+void pager_close(Pager* pager){
+    for(int i=0; i<MAX_PAGES; i++){
+        if(pager->cache[i] != nullptr){
+            flush_page(pager,i);
+            delete pager->cache[i];
+        }
+    }
+
+    fclose(pager->file);
+    delete pager;
 }

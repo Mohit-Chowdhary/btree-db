@@ -1,4 +1,5 @@
 #include <iostream>
+#include <stdexcept>
 #ifndef BTREE_NODE
 #define BTREE_NODE
 
@@ -8,6 +9,7 @@ struct BNode{
     int page_no;
     int keys[ORDER-1];
     bool is_leaf;
+    int num_keys = 0;
 
     // if not leaf
     int children[ORDER];

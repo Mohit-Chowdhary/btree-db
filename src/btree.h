@@ -7,6 +7,9 @@ struct BTree{
 };
 
 BTree* btree_open(const char* filename);
+BNode* find_parent(BTree* tree, int curr_page, int target_page);
+void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right);
+void split_leaf(BTree* tree, BNode* node, int key, int value);
 void insert(BTree* tree, int key, int value);
 int search(BTree* tree,int key);
 #endif

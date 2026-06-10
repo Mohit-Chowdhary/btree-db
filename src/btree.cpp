@@ -17,10 +17,11 @@ BTree* btree_open(const char* filename){
 
 
 void insert(BTree* tree, int key, int value){
+    std::cout << "INSERT key=" << key << " root_page=" << tree->root_page << "\n";
     BNode* node = get_page(tree->page, tree->root_page);
     while(!node->is_leaf){
         int i = 0;
-        while(i<node->num_keys && key>node->keys[i]) i++;
+        while(i<node->num_keys && key>=node->keys[i]) i++;
         node = get_page(tree->page, node->children[i]);
     }
     if(node->num_keys < ORDER-1){
@@ -53,22 +54,34 @@ BNode* find_parent(BTree* tree, int curr_page, int target_page){
     //else recurse
     int i=0;
     BNode* target = get_page(tree->page, target_page);
-    while(i<curr->num_keys && target->keys[0] > curr->keys[i]) i++;
+    while(i<curr->num_keys && target->keys[0] >= curr->keys[i]) i++;
 
     return find_parent(tree, curr->children[i],target_page);
 }
 
 void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
+    std::cout << "insert_into_parent total_pages=" << tree->page->total_pages << "\n";
     // if the split thing was root itslef(happens when not too many elems initlaly when root itslewf stores pages)
     // then the left is the root, check if that is the case first
     if(left->page_no == tree->root_page){
-        BNode* new_root = get_page(tree->page, tree->page->total_pages++);
+        std::cout << "ROOT SPLIT: old root=" << left->page_no << "\n";
+        int new_root_page = tree->page->total_pages;
+        BNode* new_root = get_page(tree->page, new_root_page);
+        tree->page->total_pages++;
         new_root->is_leaf = false;
         new_root->keys[0] = key;
         new_root->children[0] = left->page_no;
         new_root->children[1] = right->page_no;
         new_root->num_keys = 1;
+        std::cout << "allocated root page="
+            << tree->page->total_pages-1
+            << "\n";
+
+        std::cout << "new_root->page_no="
+            << new_root->page_no
+            << "\n";
         tree->root_page = new_root->page_no;
+        std::cout << "NEW ROOT: " << tree->root_page << "\n";   
         flush_page(tree->page, new_root->page_no);
         return;
     }
@@ -94,20 +107,81 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
         flush_page(tree->page, parent->page_no);
     }
     else{
-        //skull emoji
+        split_internal(tree, parent, key, right);
     }
+}
+
+void split_internal(BTree* tree, BNode* node, int key, BNode* right){
+    int temp_keys[ORDER+1];
+    int temp_children[ORDER+2];
+
+    //find insert
+    int i = 0;
+    while(i < node->num_keys && key >= node->keys[i]) i++;
+
+    for(int j=0; j<i; j++){
+        temp_keys[j] = node->keys[j];
+        temp_children[j] = node->children[j];
+    }
+    temp_keys[i] = key;
+    temp_children[i] = node->children[i];
+    temp_children[i+1] = right->page_no;
+    for(int j=i+1; j<= node->num_keys; j++){
+        temp_keys[j] = node->keys[j-1];
+        temp_children[j+1] = node->children[j];
+    }
+
+    //split
+    int split = ORDER/2;
+    int pushed_key = temp_keys[split];
+
+    // left gets "split" no of keys
+    node->num_keys = split;
+    for(int j=0; j<split; j++){
+        node->keys[j] = temp_keys[j];
+        node->children[j] = temp_children[j];
+    }
+    node->children[split] = temp_children[split];
+
+    // right gets rest
+    int new_root_page = tree->page->total_pages;
+    BNode* new_node = get_page(tree->page, new_root_page);
+    tree->page->total_pages++;
+    new_node->is_leaf = false;
+    new_node->num_keys = ORDER-split-1;
+
+    for(int j=0; j<new_node->num_keys; j++){
+        new_node->keys[j] = temp_keys[split+1+j];
+        new_node->children[j] = temp_children[split+1+j];
+    }
+    new_node->children[new_node->num_keys] = temp_children[ORDER];
+
+    flush_page(tree->page, node->page_no);
+    flush_page(tree->page, new_node->page_no);
+
+    insert_into_parent(tree, node, pushed_key, new_node);
 }
 
 void split_leaf(BTree* tree, BNode* node, int key, int value){
     // create new leaf node
+    std::cout << "SPLITTING leaf page=" << node->page_no << " num_keys=" << node->num_keys << "\n";
+    std::cout << "Keys before split: ";    
+    for(int i=0;i<node->num_keys;i++) std::cout << node->keys[i] << " ";
+    std::cout << "\n";
     int new_page_no = tree->page->total_pages;
+    std::cout<<"got page no: "<<new_page_no<<"\n";
     BNode* new_node = get_page(tree->page, new_page_no);
+    std::cout<<"new_node init\n";
     tree->page->total_pages++;
+    std::cout<<"total_pages: "<<tree->page->total_pages<<"\n";
     new_node->is_leaf = true;
+    std::cout<<"leafed\n";
 
     // temporary array with  all keys+values 
-    int temp_keys[ORDER];
-    int temp_vals[ORDER];
+    int temp_keys[ORDER+1];
+    int temp_vals[ORDER+1];
+    std::cout << "About to fill temp array, num_keys=" << node->num_keys << " key=" << key << "\n";
+    std::cout.flush();
     int inserted =  false;
     int j = 0;
     for(int i=0; i<node->num_keys; i++){
@@ -123,6 +197,10 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
         temp_keys[j] = key;
         temp_vals[j++] = value;
     }
+    std::cout << "Temp filled: ";
+    for(int i=0;i<=node->num_keys;i++) std::cout << temp_keys[i] << " ";
+    std::cout << "\n";
+    std::cout.flush();
 
     // split, left and right half
     int split = ORDER/2;
@@ -148,6 +226,13 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
 
     flush_page(tree->page,node->page_no);
     flush_page(tree->page,new_node->page_no);
+    std::cout << "New page=" << new_page_no << " split=" << split << "\n";
+    std::cout << "Left keys after: ";
+    for(int i=0;i<node->num_keys;i++) std::cout << node->keys[i] << " ";
+    std::cout << "\n";
+    std::cout << "Right keys after: ";
+    for(int i=0;i<new_node->num_keys;i++) std::cout << new_node->keys[i] << " ";
+    std::cout << "\n";
 }
 
 
@@ -156,7 +241,7 @@ int search(BTree* tree,int key){
     // get root node
     while(!node->is_leaf){
         int i = 0;
-        while(i<node->num_keys && key>node->keys[i]) i++;
+        while(i<node->num_keys && key>=node->keys[i]) i++;
         // check which index to lookinto
         node = get_page(tree->page, node->children[i]);
         // get into that, do this untill a leaf is found
@@ -166,4 +251,26 @@ int search(BTree* tree,int key){
     }
 
     return -1;
+}
+
+void print_tree(BTree* tree, int page_num, int depth){
+
+    if(page_num < 0 || page_num >= tree->page->total_pages) {
+        std::cout << "INVALID PAGE " << page_num << "\n";
+        return;
+    }
+
+    BNode* node = get_page(tree->page, page_num);
+    for(int d = 0; d < depth; d++) std::cout << "  ";
+    std::cout << (node->is_leaf ? "LEAF" : "INTERNAL") << " page=" << page_num << " keys=[";
+    for(int i = 0; i < node->num_keys; i++){
+        std::cout << node->keys[i];
+        if(i < node->num_keys-1) std::cout << ",";
+    }
+    std::cout << "]\n";
+    if(!node->is_leaf){
+        for(int i = 0; i <= node->num_keys; i++){
+            print_tree(tree, node->children[i], depth+1);
+        }
+    }
 }

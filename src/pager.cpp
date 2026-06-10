@@ -1,4 +1,4 @@
-#include "pager.h";
+#include "pager.h"
 
 Pager* pager_open(const char* filename){
     FILE* file = fopen(filename,"a+b");
@@ -16,13 +16,20 @@ BNode* get_page(Pager* pager, int page_num){
     if(pager->cache[page_num] != nullptr){
         return pager->cache[page_num];
     }
-    else{
-        BNode* node = new BNode(page_num, false);
+    
+    BNode* node = new BNode(page_num, false);
+
+    if(page_num < pager->total_pages){
         fseek(pager->file, page_num *sizeof(BNode), SEEK_SET);
-        fread(node, sizeof(BNode), 1, pager->file);
-        pager->cache[page_num] = node;
-        return pager->cache[page_num];
+        size_t n = fread(node, sizeof(BNode), 1, pager->file);
     }
+    pager->cache[page_num] = node;
+    std::cout << "GET_PAGE "
+          << page_num
+          << " -> page_no="
+          << node->page_no
+          << "\n";
+    return pager->cache[page_num];
 }
 
 

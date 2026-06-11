@@ -15,6 +15,127 @@ BTree* btree_open(const char* filename){
     return tree;
 }
 
+void delete_key(BTree* tree, int key){
+    BNode* node = get_page(tree->page, tree->root_page);
+    // get root node
+    while(!node->is_leaf){
+        int i = 0;
+        while(i<node->num_keys && key>=node->keys[i]) i++;
+        // check which index to lookinto
+        node = get_page(tree->page, node->children[i]);
+        // get into that, do this untill a leaf is found
+    }
+    for(int i=0; i<node->num_keys; i++){
+        if(node->keys[i] == key){
+            for(int j = i; j < node->num_keys-1; j++){
+                node->keys[j] = node->keys[j+1];
+                node->values[j] = node->values[j+1];
+            }
+            node->num_keys--;
+            flush_page(tree->page, node->page_no);
+
+            //check underflow
+            int min_keys = (ORDER-1)/2;
+            if(node->num_keys < min_keys && node->page_no != tree->root_page){
+                handle_underflow(tree, node);
+            }
+            return;
+        }
+    }
+
+    std::cout<<"Key not found\n";
+}
+
+void handle_underflow(BTree* tree, BNode* node){
+    BNode* parent = find_parent(tree, tree->root_page, node->page_no);
+
+    // find which index node is in parent
+    int idx = 0;
+    while(idx <= parent->num_keys && parent->children[idx]!=node->page_no) idx++;
+
+    // try borrowing from left sibling
+    if(idx>0){
+        BNode* left_sib = get_page(tree->page, parent->children[idx-1]);
+        if(left_sib->num_keys > (ORDER-1)/2){
+            // shift node right to make space for new addition
+            for(int j = node->num_keys; j>0; j--){
+                node->keys[j] = node->keys[j-1];
+                node->values[j] = node->values
+                [j-1];
+            }
+            //take last left from sibling
+            node->keys[0] = left_sib->keys[left_sib->num_keys -1];
+            node->values[0] = left_sib->values[left_sib->num_keys -1];
+            left_sib->num_keys--;
+            node->num_keys++;
+
+            //update parent
+
+            // BUG BUG BUG idx-1??
+            parent->keys[idx+1] = node->keys[0];
+            flush_page(tree->page, node->page_no);
+            flush_page(tree->page, left_sib->page_no);
+            flush_page(tree->page, parent->page_no);
+            return;
+        }
+    }
+
+    if(idx<parent->num_keys){
+        BNode* right_sib = get_page(tree->page, parent->children[idx+1]);
+        if(right_sib->num_keys > (ORDER-1)/2){
+            // borrow form right
+            node->keys[node->num_keys] = right_sib->keys[0];
+            node->values[node->num_keys] = right_sib->values[0];
+            node->num_keys++;
+
+            //shift
+            for(int j=0; j<right_sib->num_keys-1; j++){
+                right_sib->keys[j] = right_sib->keys[j+1];
+                right_sib->values[j] = right_sib->values[j+1];
+            }
+            right_sib->num_keys--;
+            //update parent
+            parent->keys[idx] = right_sib->keys[0];
+            flush_page(tree->page, node->page_no);
+            flush_page(tree->page, right_sib->page_no);
+            flush_page(tree->page, parent->page_no);
+            return;
+        }
+    }
+
+    //else merge
+    if(idx>0){
+        BNode* left_sib = get_page(tree->page, parent-> children[idx-1]);
+
+        for(int j = 0; j<node->num_keys; j++){
+            left_sib->keys[left_sib->num_keys + j] = node->keys[j];
+            left_sib->values[left_sib->num_keys + j] = node->values[j];
+        }
+        left_sib->num_keys += node->num_keys;
+        left_sib->next_leaf = node->next_leaf;
+
+        //remove seperator from parents, and remove "node" from parent's children
+        // shift all leeft
+        for(int j = idx-1; j < parent->num_keys-1; j++){
+            parent->keys[j] = parent->keys[j+1];
+            parent->children[j+1] = parent->children[j+2];
+        }
+        parent->num_keys--;
+        // REMOVE DEAD CHILDREN ALSO BUG BUG BUG BUG
+        // BUG BUG BUG
+
+        if(parent->num_keys < (ORDER-1)/2){
+            handle_underflow(tree, parent);
+        }
+
+        return;
+    }
+    
+    else{
+        //right
+    }
+}
+
 
 void insert(BTree* tree, int key, int value){
     std::cout << "INSERT key=" << key << " root_page=" << tree->root_page << "\n";
@@ -41,6 +162,9 @@ void insert(BTree* tree, int key, int value){
     }
 }
 
+
+//start search form root, find where target page is
+// curr_page=root/main whatver
 BNode* find_parent(BTree* tree, int curr_page, int target_page){
     BNode* curr = get_page(tree->page, curr_page);
 

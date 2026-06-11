@@ -14,6 +14,9 @@ void split_internal(BTree* tree, BNode* node, int key, BNode* right);
 void insert(BTree* tree, int key, int value);
 int search(BTree* tree,int key);
 
+void delete_key(BTree* tree, int key);
+void handle_underflow(BTree* tree, BNode* node);
+
 
 void print_tree(BTree* tree, int page_num, int depth);
 #endif

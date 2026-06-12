@@ -3,7 +3,7 @@
 #ifndef BTREE_NODE
 #define BTREE_NODE
 
-const int ORDER = 4;
+const int ORDER = 5;
 
 struct BNode{
     int page_no;

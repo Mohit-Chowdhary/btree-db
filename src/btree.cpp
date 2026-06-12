@@ -126,9 +126,15 @@ void handle_underflow(BTree* tree, BNode* node){
         // REMOVE DEAD CHILDREN ALSO BUG BUG BUG BUG
         // BUG BUG BUG
 
+        // if a parent underflows, this code is invalid for internal nodes.
+        // wrong
         if(parent->num_keys < (ORDER-1)/2){
             handle_underflow(tree, parent);
         }
+        
+        flush_page(tree->page, node->page_no);
+        flush_page(tree->page, left_sib->page_no);
+        flush_page(tree->page, parent->page_no);
         return;
     }
     
@@ -157,6 +163,10 @@ void handle_underflow(BTree* tree, BNode* node){
         if(parent->num_keys < (ORDER-1)/2){
             handle_underflow(tree, parent);
         }
+
+        flush_page(tree->page, node->page_no);
+        flush_page(tree->page, right_sib->page_no);
+        flush_page(tree->page, parent->page_no);
         return;
     }
 }

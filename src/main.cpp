@@ -28,6 +28,10 @@ int main(){
         else if(command == "PRINT"){
             print_tree(tree, tree->root_page, 0);
         }
+        else if(command == "DELETE"){
+            int key; std::cin>>key;
+            delete_key(tree, key);
+        }
     }
 
     return 0;

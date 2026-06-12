@@ -71,8 +71,7 @@ void handle_underflow(BTree* tree, BNode* node){
 
             //update parent
 
-            // BUG BUG BUG idx-1??
-            parent->keys[idx+1] = node->keys[0];
+            parent->keys[idx-1] = node->keys[0];
             flush_page(tree->page, node->page_no);
             flush_page(tree->page, left_sib->page_no);
             flush_page(tree->page, parent->page_no);
@@ -121,18 +120,44 @@ void handle_underflow(BTree* tree, BNode* node){
             parent->children[j+1] = parent->children[j+2];
         }
         parent->num_keys--;
+        if(parent->page_no == tree->root_page && parent->num_keys == 0){
+            tree->root_page = left_sib->page_no; // or right_sib for right merge
+        }
         // REMOVE DEAD CHILDREN ALSO BUG BUG BUG BUG
         // BUG BUG BUG
 
         if(parent->num_keys < (ORDER-1)/2){
             handle_underflow(tree, parent);
         }
-
         return;
     }
     
     else{
         //right
+        BNode* right_sib = get_page(tree->page, parent->children[idx+1]);
+        for(int j = right_sib->num_keys; j>=0; j--){
+            right_sib->keys[j+node->num_keys] = right_sib->keys[j];
+            right_sib->values[j+node->num_keys] = right_sib->values[j];
+        }
+        right_sib->num_keys += node->num_keys;
+
+        for(int j=0; j<node->num_keys; j++){
+            right_sib->keys[j] = node->keys[j];
+            right_sib->values[j] = node->values[j];
+        }
+        for(int j = idx; j < parent->num_keys - 1; j++){
+            parent->keys[j] = parent->keys[j+1];
+            parent->children[j+1] = parent->children[j+2];
+        }
+        parent->num_keys--;
+        if(parent->page_no == tree->root_page && parent->num_keys == 0){
+            tree->root_page = right_sib->page_no; // or right_sib for right merge
+        }
+
+        if(parent->num_keys < (ORDER-1)/2){
+            handle_underflow(tree, parent);
+        }
+        return;
     }
 }
 

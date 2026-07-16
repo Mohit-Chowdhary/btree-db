@@ -1,6 +1,7 @@
 #include "btree.h"
+#include "meta.h"
 
-BTree* btree_open(const char* filename){
+BTree* btree_open(const char* filename, const char* meta_filename){
     Pager* pager = pager_open(filename);
     BTree* tree = new BTree();
     tree->page = pager;
@@ -11,6 +12,12 @@ BTree* btree_open(const char* filename){
         root->is_leaf = true;
         flush_page(pager,0);
         pager->total_pages = 1;
+        tree->root_page = 0;
+        write_meta(meta_filename,{0});
+    }
+    else{
+        Meta meta = read_meta(meta_filename);
+        tree->root_page = meta.root_page;
     }
     return tree;
 }
@@ -65,6 +72,7 @@ void handle_underflow(BTree* tree, BNode* node){
     if(node->page_no == tree->root_page){
         if(node->num_keys == 0 && !node->is_leaf){
             tree->root_page = node->children[0];
+            write_meta(tree->meta_filename, {node->children[0]}); 
         }
         return;
     }
@@ -185,8 +193,10 @@ void handle_underflow(BTree* tree, BNode* node){
         flush_page(tree->page, node->page_no);
         flush_page(tree->page, left_sib->page_no);
         flush_page(tree->page, parent->page_no);
-        if(parent->page_no == tree->root_page && parent->num_keys==0)
+        if(parent->page_no == tree->root_page && parent->num_keys==0){
             tree->root_page = left_sib->page_no;
+            write_meta(tree->meta_filename, {left_sib->page_no}); 
+        }
         else if(parent->num_keys < (ORDER-1)/2  && node->page_no != tree->root_page)
             handle_underflow(tree,parent);
         return;
@@ -225,8 +235,10 @@ void handle_underflow(BTree* tree, BNode* node){
         flush_page(tree->page, node->page_no);
         flush_page(tree->page, right_sib->page_no);
         flush_page(tree->page, parent->page_no);
-        if(parent->page_no == tree->root_page && parent->num_keys == 0)
+        if(parent->page_no == tree->root_page && parent->num_keys == 0){
             tree->root_page = right_sib->page_no; // or right_sib for right merge
+            write_meta(tree->meta_filename, {right_sib->page_no}); 
+        }
         else if(parent->num_keys < (ORDER-1)/2)
             handle_underflow(tree, parent);
         return;
@@ -302,6 +314,7 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
             << new_root->page_no
             << "\n";
         tree->root_page = new_root->page_no;
+        write_meta(tree->meta_filename, {new_root->page_no}); 
         std::cout << "NEW ROOT: " << tree->root_page << "\n";   
         flush_page(tree->page, new_root->page_no);
         return;
@@ -389,14 +402,19 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
     std::cout << "Keys before split: ";    
     for(int i=0;i<node->num_keys;i++) std::cout << node->keys[i] << " ";
     std::cout << "\n";
+
+    // add page no
     int new_page_no = tree->page->total_pages;
     std::cout<<"got page no: "<<new_page_no<<"\n";
+
+    // make new node 
     BNode* new_node = get_page(tree->page, new_page_no);
     std::cout<<"new_node init\n";
+
+    // incement total pages
     tree->page->total_pages++;
     std::cout<<"total_pages: "<<tree->page->total_pages<<"\n";
     new_node->is_leaf = true;
-    std::cout<<"leafed\n";
 
     // temporary array with  all keys+values 
     int temp_keys[ORDER+1];

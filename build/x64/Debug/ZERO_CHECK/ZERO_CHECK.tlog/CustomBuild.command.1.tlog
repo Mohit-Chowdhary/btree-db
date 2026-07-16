@@ -1,0 +1,10 @@
+^C:\USERS\MOHIT\ONEDRIVE\DOCUMENTS\GITHUB\BTREE-DB\BUILD\CMAKEFILES\748C22F8A82BD13D8ADD495C541CB90F\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/mohit/OneDrive/Documents/GitHub/btree-db -BC:/Users/mohit/OneDrive/Documents/GitHub/btree-db/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/mohit/OneDrive/Documents/GitHub/btree-db/build/Database.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

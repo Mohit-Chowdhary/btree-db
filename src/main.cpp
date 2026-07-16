@@ -3,7 +3,7 @@
 #include <string>
 
 int main(){
-    BTree* tree = btree_open("db.dat");
+    BTree* tree = btree_open("db.dat","meta.dat");
 
     std::string command;
     while(true){

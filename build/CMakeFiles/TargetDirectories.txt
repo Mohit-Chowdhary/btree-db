@@ -1,3 +1,0 @@
-C:/Users/mohit/OneDrive/Documents/GitHub/btree-db/build/CMakeFiles/database.dir
-C:/Users/mohit/OneDrive/Documents/GitHub/btree-db/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/mohit/OneDrive/Documents/GitHub/btree-db/build/CMakeFiles/ZERO_CHECK.dir

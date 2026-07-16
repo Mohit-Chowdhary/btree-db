@@ -2,7 +2,10 @@
 #include <iostream>
 
 Pager* pager_open(const char* filename) {
-    FILE* file = fopen(filename, "a+b");
+    FILE* file = fopen(filename, "r+b");
+    if(!file){
+        file = fopen(filename,"w+b");
+    }
     Pager* pager = new Pager(file);
 
     fseek(pager->file, 0, SEEK_END);
@@ -58,6 +61,7 @@ BNode* get_page(Pager* pager, int page_num) {
     if (page_num < pager->total_pages) {
         fseek(pager->file, (long)page_num * sizeof(BNode), SEEK_SET);
         fread(node, sizeof(BNode), 1, pager->file);
+        node->page_no = page_num;
     }
 
     CacheEntry entry;
@@ -82,6 +86,8 @@ void mark_dirty(Pager* pager, int page_num) {
 void flush_page(Pager* pager, int page_num) {
     auto found = pager->cache.find(page_num);
     if (found == pager->cache.end()) return;
+
+    std::cout << "FLUSH_PAGE " << page_num << "\n"; 
 
     if (page_num >= pager->total_pages) pager->total_pages = page_num + 1;
 

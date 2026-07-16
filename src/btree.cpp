@@ -6,6 +6,7 @@ BTree* btree_open(const char* filename, const char* meta_filename){
     BTree* tree = new BTree();
     tree->page = pager;
     tree->root_page = 0; // root always page0
+    tree->meta_filename=meta_filename;  
 
     if(pager->total_pages==0){//if its a new db
         BNode* root = get_page(pager,0);
@@ -18,6 +19,9 @@ BTree* btree_open(const char* filename, const char* meta_filename){
     else{
         Meta meta = read_meta(meta_filename);
         tree->root_page = meta.root_page;
+        //tree->is_leaf 
+        std::cout<<"reopened the db\n";
+        std::cout<<"root page: "<<meta.root_page<<", total pages: "<<pager->total_pages<<std::endl;
     }
     return tree;
 }
@@ -44,12 +48,19 @@ void delete_key(BTree* tree, int key){
             node->num_keys--;
 
             if(parent && i == 0 && node->num_keys >= (ORDER-1)/2){
-                int idx = 0;
-                while(idx<= parent->num_keys && parent->children[idx] != node->page_no) idx++;
+                BNode* current = node;
+                BNode* p = parent;
+                while(p){
+                    int idx = 0;
+                    while(idx<= parent->num_keys && parent->children[idx] != node->page_no) idx++;
 
-                if(idx>0){
-                    parent->keys[idx-1] = node->keys[0];
-                    flush_page(tree->page,parent->page_no);
+                    if(idx>0){
+                        parent->keys[idx-1] = node->keys[0];
+                        flush_page(tree->page,parent->page_no);
+                        break;
+                    }
+                    current = p;
+                    p = find_parent(tree,tree->root_page, p->page_no);
                 }
             }
             flush_page(tree->page, node->page_no);
@@ -197,7 +208,7 @@ void handle_underflow(BTree* tree, BNode* node){
             tree->root_page = left_sib->page_no;
             write_meta(tree->meta_filename, {left_sib->page_no}); 
         }
-        else if(parent->num_keys < (ORDER-1)/2  && node->page_no != tree->root_page)
+        else if(parent->num_keys < (ORDER-1)/2)
             handle_underflow(tree,parent);
         return;
     }

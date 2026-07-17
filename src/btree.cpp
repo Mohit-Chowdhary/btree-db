@@ -39,7 +39,7 @@ void delete_key(BTree* tree, int key){
     }
     for(int i=0; i<node->num_keys; i++){
         if(node->keys[i] == key){
-            BNode* parent = find_parent(tree, tree->root_page, node->page_no);
+            PageHandle parent = find_parent(tree, tree->root_page, node->page_no);
 
             for(int j = i; j < node->num_keys-1; j++){
                 node->keys[j] = node->keys[j+1];
@@ -47,20 +47,20 @@ void delete_key(BTree* tree, int key){
             }
             node->num_keys--;
 
-            if(parent && i == 0 && node->num_keys >= (ORDER-1)/2){
-                BNode* current = node;
-                BNode* p = parent;
-                while(p){
-                    int idx = 0;
-                    while(idx<= parent->num_keys && parent->children[idx] != node->page_no) idx++;
+            if(parent.valid() && i == 0 && node->num_keys >= (ORDER-1)/2){
+                int search_page = node->page_no;
 
-                    if(idx>0){
+                while(parent.valid()){
+                    int idx = 0;
+                    while(idx<= parent->num_keys && parent->children[idx] != search_page    ) idx++;
+
+                    if(idx>0 && idx<=parent->num_keys){
                         parent->keys[idx-1] = node->keys[0];
                         flush_page(tree->page,parent->page_no);
                         break;
                     }
-                    current = p;
-                    p = find_parent(tree,tree->root_page, p->page_no);
+                    search_page = parent->page_no;
+                    parent = find_parent(tree,tree->root_page, parent->page_no);
                 }
             }
             flush_page(tree->page, node->page_no);
@@ -88,8 +88,8 @@ void handle_underflow(BTree* tree, BNode* node){
         return;
     }
 
-    BNode* parent = find_parent(tree, tree->root_page, node->page_no);
-    if(parent == nullptr){   std::cout << "NO PARENT\n";    return;}
+    PageHandle parent = find_parent(tree, tree->root_page, node->page_no);
+    if(!parent.valid()){   std::cout << "NO PARENT\n";    return;}
 
     std::cout << "parent=" << parent->page_no << " num_keys=" << parent->num_keys << "\n";
 
@@ -209,7 +209,7 @@ void handle_underflow(BTree* tree, BNode* node){
             write_meta(tree->meta_filename, {left_sib->page_no}); 
         }
         else if(parent->num_keys < (ORDER-1)/2)
-            handle_underflow(tree,parent);
+            handle_underflow(tree,parent.get());
         return;
     }
     
@@ -247,11 +247,11 @@ void handle_underflow(BTree* tree, BNode* node){
         flush_page(tree->page, right_sib->page_no);
         flush_page(tree->page, parent->page_no);
         if(parent->page_no == tree->root_page && parent->num_keys == 0){
-            tree->root_page = right_sib->page_no; // or right_sib for right merge
-            write_meta(tree->meta_filename, {right_sib->page_no}); 
+            tree->root_page = node->page_no; // or right_sib for right merge
+            write_meta(tree->meta_filename, {node->page_no}); 
         }
         else if(parent->num_keys < (ORDER-1)/2)
-            handle_underflow(tree, parent);
+            handle_underflow(tree, parent.get());
         return;
     }
 }
@@ -285,10 +285,10 @@ void insert(BTree* tree, int key, int value){
 
 //start search form root, find where target page is
 // curr_page=root/main whatver
-BNode* find_parent(BTree* tree, int curr_page, int target_page){
-    BNode* curr = get_page(tree->page, curr_page);
+PageHandle find_parent(BTree* tree, int curr_page, int target_page){
+    PageHandle curr(tree->page, curr_page);
 
-    if(curr->is_leaf) return nullptr;
+    if(curr->is_leaf) return PageHandle(nullptr,-1);
 
     //check if child is target
     for(int i=0; i<=curr->num_keys; i++){
@@ -297,7 +297,7 @@ BNode* find_parent(BTree* tree, int curr_page, int target_page){
 
     //else recurse
     int i=0;
-    BNode* target = get_page(tree->page, target_page);
+    PageHandle target(tree->page, target_page);
     while(i<curr->num_keys && target->keys[0] >= curr->keys[i]) i++;
 
     return find_parent(tree, curr->children[i],target_page);
@@ -331,9 +331,9 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
         return;
     }
 
-    BNode* parent  = find_parent(tree, tree->root_page, left->page_no);
+    PageHandle parent  = find_parent(tree, tree->root_page, left->page_no);
 
-    if(parent == nullptr){
+    if(!parent.valid()){
         throw std::runtime_error("Parent was not found at 'find_parent'.");
     }
 
@@ -349,10 +349,11 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
         parent->keys[i] = key;
         parent->children[i+1] = right->page_no;
         parent->num_keys++;
-        flush_page(tree->page, parent->page_no);
+        parent.mark_dirty();
+        parent.flush();
     }
     else{
-        split_internal(tree, parent, key, right);
+        split_internal(tree, parent.get(), key, right);
     }
 }
 

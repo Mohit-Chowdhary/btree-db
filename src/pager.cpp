@@ -1,5 +1,6 @@
 #include "pager.h"
 #include <iostream>
+#include <string>
 
 Pager* pager_open(const char* filename) {
     FILE* file = fopen(filename, "r+b");
@@ -31,19 +32,35 @@ static void touch(Pager* pager, int page_num) {
     entry.it = pager->freq_list[entry.freq].begin();
 }
 
-// Evict the least-frequently-used page; ties broken by least-recently-used.
-static void evict_one(Pager* pager) {
-    std::list<int>& victims = pager->freq_list[pager->min_freq];
-    int victim_page = victims.back();
-    victims.pop_back();
-    if (victims.empty()) pager->freq_list.erase(pager->min_freq);
+// Evict the least-frequently-used unpinned page; ties broken by least-recently-used.
+// Returns false if every cached page is currently pinned (nothing to evict).
+static bool evict_one(Pager* pager) {
+    for (auto bucket_it = pager->freq_list.begin(); bucket_it != pager->freq_list.end(); ++bucket_it) {
+        std::list<int>& bucket = bucket_it->second;
 
-    CacheEntry& entry = pager->cache[victim_page];
-    if (entry.dirty) {
-        flush_page(pager, victim_page);
+        for (auto it = bucket.rbegin(); it != bucket.rend(); ++it) {
+            int candidate = *it;
+            if (pager->cache[candidate].pin_count > 0) continue; // skip pinned pages
+
+            // found an unpinned victim — remove it from this bucket
+            bucket.erase(std::next(it).base());
+            if (bucket.empty()) pager->freq_list.erase(bucket_it->first);
+
+            CacheEntry& entry = pager->cache[candidate];
+            if (entry.dirty) {
+                flush_page(pager, candidate);
+            }
+            delete entry.node;
+            pager->cache.erase(candidate);
+
+            // if we just emptied out the old min_freq bucket, recompute it lazily
+            if (!pager->freq_list.empty())
+                pager->min_freq = pager->freq_list.begin()->first;
+
+            return true;
+        }
     }
-    delete entry.node;
-    pager->cache.erase(victim_page);
+    return false; // every cached page is pinned
 }
 
 BNode* get_page(Pager* pager, int page_num) {
@@ -54,7 +71,11 @@ BNode* get_page(Pager* pager, int page_num) {
     }
 
     if ((int)pager->cache.size() >= pager->capacity) {
-        evict_one(pager);
+        if( !evict_one(pager)){
+            throw std::runtime_error(
+                "pager: cache full and every page is pinned (capacity=" +
+                std::to_string(pager->capacity) + ")");
+        }
     }
 
     BNode* node = new BNode(page_num, false);
@@ -105,4 +126,16 @@ void pager_close(Pager* pager) {
     pager->cache.clear();
     fclose(pager->file);
     delete pager;
+}
+
+void pin_page(Pager* pager, int page_num){
+    auto found = pager->cache.find(page_num);
+    if(found != pager->cache.end()) found->second.pin_count++;
+}
+
+void unpin_page(Pager* pager, int page_num){
+    auto found = pager->cache.find(page_num);
+    if(found != pager->cache.end() && found->second.pin_count >0){
+        found->second.pin_count--;
+    }
 }

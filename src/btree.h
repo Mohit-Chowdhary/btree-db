@@ -8,7 +8,7 @@ struct BTree{
 };
 
 BTree* btree_open(const char* filename, const char* meta_filename);
-BNode* find_parent(BTree* tree, int curr_page, int target_page);
+PageHandle find_parent(BTree* tree, int curr_page, int target_page);
 void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right);
 void split_leaf(BTree* tree, BNode* node, int key, int value);
 void split_internal(BTree* tree, BNode* node, int key, BNode* right);

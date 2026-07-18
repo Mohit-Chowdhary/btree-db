@@ -604,3 +604,9 @@ std::vector<std::pair<int,int>> range_query(BTree* tree, int left, int right){
 
     return results;
 }
+
+
+void btree_close(BTree* tree){
+    pager_close(tree->page);
+    delete tree;
+}

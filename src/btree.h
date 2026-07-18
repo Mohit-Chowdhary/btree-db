@@ -18,6 +18,7 @@ void insert(BTree* tree, int key, int value);
 int search(BTree* tree,int key);
 std::vector<std::pair<int,int>> range_query(BTree* tree, int left, int right);
 
+void btree_close(BTree* tree);
 void delete_key(BTree* tree, int key);
 void handle_underflow(BTree* tree, BNode* node);
 

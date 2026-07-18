@@ -28,6 +28,13 @@ int main(){
         else if(command == "PRINT"){
             print_tree(tree, tree->root_page, 0);
         }
+        else if(command == "RANGE"){
+            int left,right; std::cin>>left>>right;
+            std::vector<std::pair<int,int>> p =  range_query(tree,left,right);
+
+            std::cout<<"Range query: ";
+            for(auto &[x,y]: p) std::cout<<"Key: "<<x<<", Val: "<<y<<"\n";
+        }
         else if(command == "DELETE"){
             int key; std::cin>>key;
             delete_key(tree, key);

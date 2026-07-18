@@ -8,10 +8,11 @@ BTree* btree_open(const char* filename, const char* meta_filename){
     tree->root_page = 0; // root always page0
     tree->meta_filename=meta_filename;  
 
-    if(pager->total_pages==0){//if its a new db
-        BNode* root = get_page(pager,0);
+    if(pager->total_pages==0){//if its a new db 
+        PageHandle root(pager,0);
         root->is_leaf = true;
-        flush_page(pager,0);
+        root.mark_dirty();
+        root.flush();
         pager->total_pages = 1;
         tree->root_page = 0;
         write_meta(meta_filename,{0});
@@ -27,14 +28,14 @@ BTree* btree_open(const char* filename, const char* meta_filename){
 }
 
 void delete_key(BTree* tree, int key){
-    BNode* node = get_page(tree->page, tree->root_page);
+    PageHandle node(tree->page, tree->root_page);
     // get root node
     int j;
     while(!node->is_leaf){
         j = 0;
         while(j<node->num_keys && key>=node->keys[j]) j++;
         // check which index to lookinto
-        node = get_page(tree->page, node->children[j]);
+        node = PageHandle(tree->page, node->children[j]);
         // get into that, do this untill a leaf is found
     }
     for(int i=0; i<node->num_keys; i++){
@@ -56,19 +57,21 @@ void delete_key(BTree* tree, int key){
 
                     if(idx>0 && idx<=parent->num_keys){
                         parent->keys[idx-1] = node->keys[0];
-                        flush_page(tree->page,parent->page_no);
+                        parent.mark_dirty();
+                        parent.flush();
                         break;
                     }
                     search_page = parent->page_no;
                     parent = find_parent(tree,tree->root_page, parent->page_no);
                 }
             }
-            flush_page(tree->page, node->page_no);
+            node.mark_dirty();
+            node.flush();
 
             //check underflow
             int min_keys = (ORDER-1)/2;
             if(node->num_keys < min_keys && node->page_no != tree->root_page){
-                handle_underflow(tree, node);
+                handle_underflow(tree, node.get());
             }
             return;
         }
@@ -77,7 +80,8 @@ void delete_key(BTree* tree, int key){
     std::cout<<"Key not found\n";
 }
 
-void handle_underflow(BTree* tree, BNode* node){
+void handle_underflow(BTree* tree, BNode* node_raw){
+    PageHandle node(tree->page,node_raw->page_no);
     std::cout << "UNDERFLOW node=" << node->page_no << " num_keys=" << node->num_keys << "\n";
 
     if(node->page_no == tree->root_page){
@@ -100,7 +104,7 @@ void handle_underflow(BTree* tree, BNode* node){
 
     // try borrowing from left sibling
     if(idx>0){
-        BNode* left_sib = get_page(tree->page, parent->children[idx-1]);
+        PageHandle left_sib(tree->page, parent->children[idx-1]);
         if(left_sib->num_keys > (ORDER-1)/2){
             if(node->is_leaf){
                 // shift node right to make space for new addition
@@ -127,15 +131,18 @@ void handle_underflow(BTree* tree, BNode* node){
 
             left_sib->num_keys--;
             node->num_keys++;
-            flush_page(tree->page, node->page_no);
-            flush_page(tree->page, left_sib->page_no);
-            flush_page(tree->page, parent->page_no);
+            left_sib.mark_dirty();
+            parent.mark_dirty();
+            node.mark_dirty();
+            node.flush();
+            left_sib.flush();
+            parent.flush();
             return;
         }
     }
 
     if(idx<parent->num_keys){
-        BNode* right_sib = get_page(tree->page, parent->children[idx+1]);   
+        PageHandle right_sib(tree->page, parent->children[idx+1]);   
         if(right_sib->num_keys > (ORDER-1)/2){
             if(node->is_leaf){
                 // borrow form right
@@ -162,17 +169,20 @@ void handle_underflow(BTree* tree, BNode* node){
             }
             right_sib->num_keys--;
             node->num_keys++;
+            right_sib.mark_dirty();
+            parent.mark_dirty();
+            node.mark_dirty();
             //update parent
-            flush_page(tree->page, node->page_no);
-            flush_page(tree->page, right_sib->page_no);
-            flush_page(tree->page, parent->page_no);
+            node.flush();
+            right_sib.flush();
+            parent.flush();
             return;
         }
     }
 
     //else merge
     if(idx>0){
-        BNode* left_sib = get_page(tree->page, parent-> children[idx-1]);
+        PageHandle left_sib(tree->page, parent-> children[idx-1]);
         if(node->is_leaf){
             for(int j = 0; j<node->num_keys; j++){
                 left_sib->keys[left_sib->num_keys + j] = node->keys[j];
@@ -201,12 +211,15 @@ void handle_underflow(BTree* tree, BNode* node){
             parent->children[j+1] = parent->children[j+2];
         }
         parent->num_keys--;
-        flush_page(tree->page, node->page_no);
-        flush_page(tree->page, left_sib->page_no);
-        flush_page(tree->page, parent->page_no);
+        left_sib.mark_dirty();
+        parent.mark_dirty();
+        node.mark_dirty();
+        node.flush();
+        left_sib.flush();
+        parent.flush();
         if(parent->page_no == tree->root_page && parent->num_keys==0){
             tree->root_page = left_sib->page_no;
-            write_meta(tree->meta_filename, {left_sib->page_no}); 
+            write_meta(tree->meta_filename, {left_sib.page()}); 
         }
         else if(parent->num_keys < (ORDER-1)/2)
             handle_underflow(tree,parent.get());
@@ -215,7 +228,7 @@ void handle_underflow(BTree* tree, BNode* node){
     
     else{
         //right
-        BNode* right_sib = get_page(tree->page, parent->children[idx+1]);
+        PageHandle right_sib(tree->page, parent->children[idx+1]);
         if(node->is_leaf){
             for(int j=0; j<right_sib->num_keys; j++){
                 node->keys[node->num_keys + j] = right_sib->keys[j];
@@ -241,11 +254,13 @@ void handle_underflow(BTree* tree, BNode* node){
             parent->children[j+1] = parent->children[j+2];
         }
         parent->num_keys--;
+        right_sib.mark_dirty();
+        parent.mark_dirty();
+        node.mark_dirty();
 
-
-        flush_page(tree->page, node->page_no);
-        flush_page(tree->page, right_sib->page_no);
-        flush_page(tree->page, parent->page_no);
+        node.flush();
+        right_sib.flush();
+        parent.flush();
         if(parent->page_no == tree->root_page && parent->num_keys == 0){
             tree->root_page = node->page_no; // or right_sib for right merge
             write_meta(tree->meta_filename, {node->page_no}); 
@@ -259,12 +274,20 @@ void handle_underflow(BTree* tree, BNode* node){
 
 void insert(BTree* tree, int key, int value){
     std::cout << "INSERT key=" << key << " root_page=" << tree->root_page << "\n";
-    BNode* node = get_page(tree->page, tree->root_page);
+    PageHandle node(tree->page, tree->root_page);
     while(!node->is_leaf){
         int i = 0;
         while(i<node->num_keys && key>=node->keys[i]) i++;
-        node = get_page(tree->page, node->children[i]);
+        node = PageHandle(tree->page, node->children[i]);
     }
+    //duplicate check
+    for(int i = 0; i < node->num_keys; i++){
+        if(node->keys[i] == key){
+            std::cout << "INSERT REJECTED: key=" << key << " already exists\n";
+            return;
+        }
+    }
+
     if(node->num_keys < ORDER-1){
         int i = node->num_keys-1;
         while(i>=0 && node->keys[i]> key){
@@ -275,10 +298,11 @@ void insert(BTree* tree, int key, int value){
         node->keys[i+1] = key;
         node->values[i+1] = value;
         node->num_keys++;
-        flush_page(tree->page,node->page_no);
+        node.mark_dirty();
+        node.flush();
     }
     else{
-        split_leaf(tree, node, key, value);
+        split_leaf(tree, node.get(), key, value);
     }
 }
 
@@ -310,7 +334,7 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
     if(left->page_no == tree->root_page){
         std::cout << "ROOT SPLIT: old root=" << left->page_no << "\n";
         int new_root_page = tree->page->total_pages;
-        BNode* new_root = get_page(tree->page, new_root_page);
+        PageHandle new_root(tree->page, new_root_page);
         tree->page->total_pages++;
         new_root->is_leaf = false;
         new_root->keys[0] = key;
@@ -327,7 +351,8 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
         tree->root_page = new_root->page_no;
         write_meta(tree->meta_filename, {new_root->page_no}); 
         std::cout << "NEW ROOT: " << tree->root_page << "\n";   
-        flush_page(tree->page, new_root->page_no);
+        new_root.mark_dirty();
+        new_root.flush();
         return;
     }
 
@@ -357,9 +382,10 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
     }
 }
 
-void split_internal(BTree* tree, BNode* node, int key, BNode* right){
+void split_internal(BTree* tree, BNode* node_raw, int key, BNode* right){
     int temp_keys[ORDER+1];
     int temp_children[ORDER+2];
+    PageHandle node(tree->page, node_raw->page_no);
 
     //find insert
     int i = 0;
@@ -391,7 +417,7 @@ void split_internal(BTree* tree, BNode* node, int key, BNode* right){
 
     // right gets rest
     int new_root_page = tree->page->total_pages;
-    BNode* new_node = get_page(tree->page, new_root_page);
+    PageHandle new_node(tree->page, new_root_page);
     tree->page->total_pages++;
     new_node->is_leaf = false;
     new_node->num_keys = ORDER-split-1;
@@ -402,14 +428,17 @@ void split_internal(BTree* tree, BNode* node, int key, BNode* right){
     }
     new_node->children[new_node->num_keys] = temp_children[ORDER];
 
-    flush_page(tree->page, node->page_no);
-    flush_page(tree->page, new_node->page_no);
+    node.mark_dirty();
+    new_node.mark_dirty();
+    node.flush();
+    new_node.flush();
 
-    insert_into_parent(tree, node, pushed_key, new_node);
+    insert_into_parent(tree, node.get(), pushed_key, new_node.get());
 }
 
-void split_leaf(BTree* tree, BNode* node, int key, int value){
+void split_leaf(BTree* tree, BNode* node_raw, int key, int value){
     // create new leaf node
+    PageHandle node(tree->page, node_raw->page_no);
     std::cout << "SPLITTING leaf page=" << node->page_no << " num_keys=" << node->num_keys << "\n";
     std::cout << "Keys before split: ";    
     for(int i=0;i<node->num_keys;i++) std::cout << node->keys[i] << " ";
@@ -420,7 +449,7 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
     std::cout<<"got page no: "<<new_page_no<<"\n";
 
     // make new node 
-    BNode* new_node = get_page(tree->page, new_page_no);
+    PageHandle new_node(tree->page, new_page_no);
     std::cout<<"new_node init\n";
 
     // incement total pages
@@ -473,10 +502,12 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
     node->next_leaf = new_page_no;
 
     //push middle key to parent
-    insert_into_parent(tree, node, new_node->keys[0], new_node);
+    insert_into_parent(tree, node.get(), new_node->keys[0], new_node.get());
 
-    flush_page(tree->page,node->page_no);
-    flush_page(tree->page,new_node->page_no);
+    node.mark_dirty();
+    new_node.mark_dirty();
+    node.flush();
+    new_node.flush();
     std::cout << "New page=" << new_page_no << " split=" << split << "\n";
     std::cout << "Left keys after: ";
     for(int i=0;i<node->num_keys;i++) std::cout << node->keys[i] << " ";
@@ -488,13 +519,13 @@ void split_leaf(BTree* tree, BNode* node, int key, int value){
 
 
 int search(BTree* tree,int key){
-    BNode* node = get_page(tree->page, tree->root_page);
+    PageHandle node(tree->page, tree->root_page);
     // get root node
     while(!node->is_leaf){
         int i = 0;
         while(i<node->num_keys && key>=node->keys[i]) i++;
         // check which index to lookinto
-        node = get_page(tree->page, node->children[i]);
+        node = PageHandle(tree->page, node->children[i]);
         // get into that, do this untill a leaf is found
     }
     for(int i=0; i<node->num_keys; i++){
@@ -511,7 +542,7 @@ void print_tree(BTree* tree, int page_num, int depth) {
         return;
     }
 
-    BNode* node = get_page(tree->page, page_num);
+    PageHandle node(tree->page, page_num);
 
     std::cout << std::string(depth * 4, ' ');
 
@@ -546,4 +577,30 @@ void print_tree(BTree* tree, int page_num, int depth) {
                 print_tree(tree, node->children[i], depth + 1);
         }
     }
+}
+
+std::vector<std::pair<int,int>> range_query(BTree* tree, int left, int right){
+    std::vector<std::pair<int,int>> results;
+
+    if(left>right) return results;
+
+    PageHandle node(tree->page, tree->root_page);
+    while(!node->is_leaf){
+        int i=0;
+        while(i<node->num_keys && left>=node->keys[i]) i++;
+        node = PageHandle(tree->page, node->children[i]);
+    }
+
+    while(true){
+        for(int i=0; i<node->num_keys; i++){
+            if(node->keys[i]>=left && node->keys[i] <= right){
+                results.push_back({node->keys[i], node->values[i]});
+            }
+            if(node->keys[i]>right) return results;
+        }
+        if(node->next_leaf == -1) break;
+        node = PageHandle(tree->page, node->next_leaf);
+    }
+
+    return results;
 }

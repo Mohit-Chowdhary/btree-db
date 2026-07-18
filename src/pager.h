@@ -44,6 +44,7 @@ public:
     PageHandle(PageHandle&& other) noexcept
     : pager(other.pager), page_num(other.page_num), node(other.node){
         other.pager = nullptr;
+        other.page_num = -1;
     }
     PageHandle& operator=(PageHandle&& other) noexcept{
         if( this != &other){

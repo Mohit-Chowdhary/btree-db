@@ -217,6 +217,7 @@ void handle_underflow(BTree* tree, BNode* node_raw){
         node.flush();
         left_sib.flush();
         parent.flush();
+        free_page(tree->page, node.page());
         if(parent->page_no == tree->root_page && parent->num_keys==0){
             tree->root_page = left_sib->page_no;
             write_meta(tree->meta_filename, {left_sib.page()}); 
@@ -261,6 +262,7 @@ void handle_underflow(BTree* tree, BNode* node_raw){
         node.flush();
         right_sib.flush();
         parent.flush();
+        free_page(tree->page, right_sib.page());
         if(parent->page_no == tree->root_page && parent->num_keys == 0){
             tree->root_page = node->page_no; // or right_sib for right merge
             write_meta(tree->meta_filename, {node->page_no}); 
@@ -445,15 +447,13 @@ void split_leaf(BTree* tree, BNode* node_raw, int key, int value){
     std::cout << "\n";
 
     // add page no
-    int new_page_no = tree->page->total_pages;
+    int new_page_no = allocate_page(tree->page);
     std::cout<<"got page no: "<<new_page_no<<"\n";
 
     // make new node 
     PageHandle new_node(tree->page, new_page_no);
     std::cout<<"new_node init\n";
 
-    // incement total pages
-    tree->page->total_pages++;
     std::cout<<"total_pages: "<<tree->page->total_pages<<"\n";
     new_node->is_leaf = true;
 

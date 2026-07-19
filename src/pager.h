@@ -18,6 +18,8 @@ void pin_page(Pager* pager, int page_num);
 void unpin_page(Pager* pager, int page_num);
 static void touch(Pager* pager, int page_num);
 static bool evict_one(Pager* pager);
+int allocate_page(Pager* pager);
+void free_page(Pager* pager, int page_num);
 
 
 class PageHandle{
@@ -83,6 +85,7 @@ struct Pager {
     int capacity;
     int min_freq;
 
+    std::vector<int> free_pages;
     std::unordered_map<int, CacheEntry> cache;         // page_num -> entry
     std::unordered_map<int, std::list<int>> freq_list;  // freq -> MRU-first list of page_nums
 

@@ -139,3 +139,16 @@ void unpin_page(Pager* pager, int page_num){
         found->second.pin_count--;
     }
 }
+
+int allocate_page(Pager* pager){
+    if(!pager->free_pages.empty()){
+        int reused = pager->free_pages.back();
+        pager->free_pages.pop_back();
+        return reused;
+    }
+    return pager->total_pages++;
+}
+
+void free_page(Pager* pager, int page_num){
+    pager->free_pages.push_back(page_num);
+}

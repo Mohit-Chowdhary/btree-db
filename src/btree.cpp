@@ -87,7 +87,7 @@ void handle_underflow(BTree* tree, BNode* node_raw){
     if(node->page_no == tree->root_page){
         if(node->num_keys == 0 && !node->is_leaf){
             tree->root_page = node->children[0];
-            write_meta(tree->meta_filename, {node->children[0]}); 
+            write_meta(tree->meta_filename.c_str(), {node->children[0]}); 
         }
         return;
     }
@@ -220,7 +220,7 @@ void handle_underflow(BTree* tree, BNode* node_raw){
         free_page(tree->page, node.page());
         if(parent->page_no == tree->root_page && parent->num_keys==0){
             tree->root_page = left_sib->page_no;
-            write_meta(tree->meta_filename, {left_sib.page()}); 
+            write_meta(tree->meta_filename.c_str(), {left_sib.page()}); 
         }
         else if(parent->num_keys < (ORDER-1)/2)
             handle_underflow(tree,parent.get());
@@ -265,7 +265,7 @@ void handle_underflow(BTree* tree, BNode* node_raw){
         free_page(tree->page, right_sib.page());
         if(parent->page_no == tree->root_page && parent->num_keys == 0){
             tree->root_page = node->page_no; // or right_sib for right merge
-            write_meta(tree->meta_filename, {node->page_no}); 
+            write_meta(tree->meta_filename.c_str(), {node->page_no}); 
         }
         else if(parent->num_keys < (ORDER-1)/2)
             handle_underflow(tree, parent.get());
@@ -351,7 +351,7 @@ void insert_into_parent(BTree* tree, BNode* left, int key, BNode* right){
             << new_root->page_no
             << "\n";
         tree->root_page = new_root->page_no;
-        write_meta(tree->meta_filename, {new_root->page_no}); 
+        write_meta(tree->meta_filename.c_str(), {new_root->page_no}); 
         std::cout << "NEW ROOT: " << tree->root_page << "\n";   
         new_root.mark_dirty();
         new_root.flush();

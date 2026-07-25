@@ -6,7 +6,7 @@
 struct BTree{
     Pager* page;
     int root_page;
-    const char* meta_filename;
+    std::string meta_filename;
 };
 
 BTree* btree_open(const char* filename, const char* meta_filename);

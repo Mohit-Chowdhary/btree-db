@@ -418,9 +418,8 @@ void split_internal(BTree* tree, BNode* node_raw, int key, BNode* right){
     node->children[split] = temp_children[split];
 
     // right gets rest
-    int new_root_page = tree->page->total_pages;
-    PageHandle new_node(tree->page, new_root_page);
-    tree->page->total_pages++;
+    int new_page_no = allocate_page(tree->page);
+    PageHandle new_node(tree->page, new_page_no);
     new_node->is_leaf = false;
     new_node->num_keys = ORDER-split-1;
 

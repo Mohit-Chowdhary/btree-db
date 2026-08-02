@@ -17,6 +17,7 @@ add_executable(database
     src/btree.cpp
     src/pager.cpp
     src/meta.cpp
+    src/wal.cpp
 )
 
 pybind11_add_module(btree_engine
@@ -24,4 +25,5 @@ pybind11_add_module(btree_engine
     src/btree.cpp
     src/pager.cpp
     src/meta.cpp
+    src/wal.cpp
 )

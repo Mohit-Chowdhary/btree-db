@@ -2,7 +2,8 @@
 #include "meta.h"
 
 BTree* btree_open(const char* filename, const char* meta_filename){
-    Pager* pager = pager_open(filename);
+    std::string wal_filename = std::string(filename) + ".wal";
+    Pager* pager = pager_open(filename,wal_filename.c_str());
     BTree* tree = new BTree();
     tree->page = pager;
     tree->root_page = 0; // root always page0

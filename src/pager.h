@@ -9,7 +9,7 @@ const int CACHE_CAPACITY = 100; // max pages resident in memory at once
 
 struct Pager;
 
-Pager* pager_open(const char* filename);
+Pager* pager_open(const char* filename, const char* wal_filename);
 BNode* get_page(Pager* pager, int page_num);
 void mark_dirty(Pager* pager, int page_num);
 void flush_page(Pager* pager, int page_num);
@@ -85,6 +85,7 @@ struct Pager {
     int capacity;
     int min_freq;
 
+    std::string wal_filename;
     std::vector<int> free_pages;
     std::unordered_map<int, CacheEntry> cache;         // page_num -> entry
     std::unordered_map<int, std::list<int>> freq_list;  // freq -> MRU-first list of page_nums

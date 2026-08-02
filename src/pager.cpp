@@ -1,13 +1,28 @@
 #include "pager.h"
+#include "wal.h"
 #include <iostream>
 #include <string>
 
-Pager* pager_open(const char* filename) {
+Pager* pager_open(const char* filename, const char* wal_filename) {
+    //wal recovery
+    WALRecord recovered{0, BNode(0, false), 0};
+    if(wal_read_and_validate(wal_filename, recovered)){
+        std::cout<<"WAL recovering page "<<recovered.page_num<<"\n";
+        FILE* recovery_file = fopen(filename, "r+b");
+        fseek(recovery_file,(long)recovered.page_num*sizeof(BNode), SEEK_SET);
+        fwrite(&recovered.data, sizeof(BNode), 1, recovery_file);
+        fflush(recovery_file);
+        fclose(recovery_file);
+    }
+    wal_clear(wal_filename);
+
+    //main
     FILE* file = fopen(filename, "r+b");
     if(!file){
         file = fopen(filename,"w+b");
     }
     Pager* pager = new Pager(file);
+    pager->wal_filename = wal_filename;
 
     fseek(pager->file, 0, SEEK_END);
     long file_size = ftell(pager->file);
@@ -110,11 +125,20 @@ void flush_page(Pager* pager, int page_num) {
 
     std::cout << "FLUSH_PAGE " << page_num << "\n"; 
 
+    //write ahead
+    if(!wal_write(pager->wal_filename.c_str(), page_num, *found->second.node)){
+        std::cerr << "FLUSH_PAGE: WAL write failed for page " << page_num << " — aborting flush\n";
+        return;
+    }
+
     if (page_num >= pager->total_pages) pager->total_pages = page_num + 1;
 
     fseek(pager->file, (long)page_num * sizeof(BNode), SEEK_SET);
     fwrite(found->second.node, sizeof(BNode), 1, pager->file);
     fflush(pager->file);
+
+    //mark
+    wal_clear(pager->wal_filename.c_str());
     found->second.dirty = false;
 }
 

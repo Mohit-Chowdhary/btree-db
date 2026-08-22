@@ -1,0 +1,8 @@
+build
+*.dat
+*.db
+db.dat.wal
+
+benchmark.db
+benchmark_meta.db
+benchmark.db.wal
